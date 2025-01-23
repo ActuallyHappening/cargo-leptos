@@ -14,19 +14,27 @@ use crate::ext::anyhow::{Context, Result};
 use crate::ext::PathBufExt;
 use crate::logger::GRAY;
 use camino::Utf8PathBuf;
-use config::{Cli, Config};
+use config::{Cli, CommandType, Config};
 use ext::fs;
 use signal::Interrupt;
 use std::env;
 use std::path::PathBuf;
 
 pub async fn run(args: Cli) -> Result<()> {
-    let verbose = args.opts().map(|o| o.verbose).unwrap_or(0);
-    logger::setup(verbose, &args.log);
-
-    if let New(new) = &args.command {
+    if let Commands::New(new) = &args.command {
         return new.run().await;
     }
+
+    let command_type = CommandType::from(&args.command);
+    let config = resolve_config(args)?;
+    execute_command(command_type, config).await?;
+
+    Ok(())
+}
+
+pub fn resolve_config(args: Cli) -> Result<Config> {
+    let verbose = args.opts().map(|o| o.verbose).unwrap_or(0);
+    logger::setup(verbose, &args.log);
 
     let manifest_path = args
         .manifest_path
@@ -48,6 +56,10 @@ pub async fn run(args: Cli) -> Result<()> {
         GRAY.paint(config.working_dir.as_str())
     );
 
+    Ok(config)
+}
+
+pub async fn execute_command(command: CommandType, config: Config) -> Result<()> {
     if config.working_dir.join("package.json").exists() {
         log::debug!("Path found 'package.json' adding 'node_modules/.bin' to PATH");
         let node_modules = &config.working_dir.join("node_modules");
@@ -70,13 +82,12 @@ pub async fn run(args: Cli) -> Result<()> {
     }
 
     let _monitor = Interrupt::run_ctrl_c_monitor();
-    use Commands::{Build, EndToEnd, New, Serve, Test, Watch};
-    match args.command {
-        New(_) => panic!(),
-        Build(_) => command::build_all(&config).await,
-        Serve(_) => command::serve(&config.current_project()?).await,
-        Test(_) => command::test_all(&config).await,
-        EndToEnd(_) => command::end2end_all(&config).await,
-        Watch(_) => command::watch(&config.current_project()?).await,
+    match command {
+        CommandType::New => unreachable!(),
+        CommandType::Build => command::build_all(&config).await,
+        CommandType::Serve => command::serve(&config.current_project()?).await,
+        CommandType::Test => command::test_all(&config).await,
+        CommandType::EndToEnd => command::end2end_all(&config).await,
+        CommandType::Watch => command::watch(&config.current_project()?).await,
     }
 }

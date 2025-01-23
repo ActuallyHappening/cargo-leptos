@@ -64,10 +64,10 @@ pub struct Opts {
 #[derive(Debug, Clone, Parser, PartialEq, Default)]
 pub struct BinOpts {
     #[command(flatten)]
-    opts: Opts,
+    pub opts: Opts,
 
     #[arg(trailing_var_arg = true)]
-    bin_args: Vec<String>,
+    pub bin_args: Vec<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -104,7 +104,8 @@ impl Cli {
     }
 }
 
-#[derive(Debug, Subcommand, PartialEq)]
+#[derive(strum::EnumDiscriminants, Debug, Subcommand, PartialEq)]
+#[strum_discriminants(name(CommandType))]
 pub enum Commands {
     /// Build the server (feature ssr) and the client (wasm with feature hydrate).
     Build(Opts),
